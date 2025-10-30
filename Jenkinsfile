@@ -33,10 +33,12 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps { checkout scm }
+            steps {
+                checkout scm
+            }
         }
 
-        stage('Build') {
+        stage('Build Image') {
             steps {
                 sh '''
                 docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} .
@@ -55,9 +57,9 @@ pipeline {
             }
         }
 
-        stage('Push') {
+        stage('Push to DockerHub') {
             steps {
-                withDockerRegistry([credentialsId: 'docker-hub-credentials']) { 
+                withDockerRegistry([credentialsId: 'docker-hub-credentials']) {
                     sh '''
                     docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
                     docker push ${DOCKER_IMAGE}:latest
@@ -66,13 +68,14 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy to Kubernetes') {
             steps {
                 sh '''
                 apk add --no-cache curl
                 curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl
                 chmod +x kubectl
                 mv kubectl /usr/bin/
+
                 sed -i "s|image: .*|image: ${DOCKER_IMAGE}:latest|g" k8s/deployment.yaml
                 kubectl apply -f k8s/deployment.yaml -n ${K8S_NAMESPACE}
                 kubectl apply -f k8s/service.yaml -n ${K8S_NAMESPACE}
@@ -82,7 +85,14 @@ pipeline {
     }
 
     post {
-        success { echo 'Deployed to Kubernetes!' }
-        failure { echo 'Pipeline failed!' }
+        success {
+            echo 'SUCCESS: Flask app deployed to Kubernetes!'
+        }
+        failure {
+            echo 'FAILURE: Check logs above.'
+        }
+        always {
+            sh 'docker system prune -f || true'
+        }
     }
 }
