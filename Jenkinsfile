@@ -33,12 +33,10 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            steps { checkout scm }
         }
 
-        stage('Build Image') {
+        stage('Build') {
             steps {
                 sh '''
                 docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} .
@@ -57,9 +55,12 @@ pipeline {
             }
         }
 
-        stage('Push to DockerHub') {
+        stage('Push') {
             steps {
-                withDockerRegistry([credentialsId: 'docker-hub-credentials']) {
+                withDockerRegistry([
+                    credentialsId: 'docker-hub-credentials',
+                    url: 'https://index.docker.io/v1/'
+                ]) {
                     sh '''
                     docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
                     docker push ${DOCKER_IMAGE}:latest
@@ -68,11 +69,11 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Deploy') {
             steps {
                 sh '''
                 apk add --no-cache curl
-                curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl
+                curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
                 chmod +x kubectl
                 mv kubectl /usr/bin/
 
@@ -86,10 +87,10 @@ pipeline {
 
     post {
         success {
-            echo 'SUCCESS: Flask app deployed to Kubernetes!'
+            echo 'SUCCESS: Flask deployed to K8s!'
         }
         failure {
-            echo 'FAILURE: Check logs above.'
+            echo 'FAILURE!'
         }
         always {
             sh 'docker system prune -f || true'
