@@ -33,12 +33,10 @@ pipeline {
 
     stages {
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            steps { checkout scm }
         }
 
-        stage('Build Image') {
+        stage('Build') {
             steps {
                 sh '''
                 docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} .
@@ -75,7 +73,6 @@ pipeline {
                 curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl
                 chmod +x kubectl
                 mv kubectl /usr/bin/
-
                 sed -i "s|image: .*|image: ${DOCKER_IMAGE}:latest|g" k8s/deployment.yaml
                 kubectl apply -f k8s/deployment.yaml -n ${K8S_NAMESPACE}
                 kubectl apply -f k8s/service.yaml -n ${K8S_NAMESPACE}
@@ -85,11 +82,7 @@ pipeline {
     }
 
     post {
-        always {
-            sh 'docker system prune -f || true'
-        }
-        success {
-            echo 'SUCCESS: Flask app deployed to Kubernetes!'
-        }
+        success { echo 'Deployed!' }
+        failure { echo 'Failed!' }
     }
 }
