@@ -1,8 +1,9 @@
 pipeline {
-    agent any
-    environment {
-        DOCKER_IMAGE = '/atatara/shiet-app'
-        K8S_NAMESPACE = 'default'
+    agent {
+    kubernetes {
+	label 'docker-agent'
+	defaultContainer 'docker'
+	}
     }
     stages {
         stage('Checkout') {
@@ -12,8 +13,8 @@ pipeline {
         }
         stage('Build') {
             steps {
-                script {
-                    docker.build("${DOCKER_IMAGE}:${BUILD_NUMBER}")
+                   sh 'docker build -t ${DOCKER-IMAGE}:$BUILD_NUMBER} .'
+		}
                 }
             }
         }
