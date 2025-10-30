@@ -32,7 +32,9 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') { steps { checkout scm } }
+        stage('Checkout') {
+            steps { checkout scm }
+        }
 
         stage('Build') {
             steps {
@@ -84,8 +86,14 @@ pipeline {
     }
 
     post {
-        success { echo 'DEPLOYED!' }
-        failure { echo 'FAILED!' }
-        always { sh 'docker system prune -f || true' }
+        success {
+            echo 'SUCCESS: Flask app deployed to Kubernetes!'
+        }
+        failure {
+            echo 'FAILURE: Check logs above.'
+        }
+        always {
+            sh 'docker system prune -f || true'
+        }
     }
 }
