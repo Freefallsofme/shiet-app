@@ -57,7 +57,7 @@ pipeline {
 
         stage('Push') {
             steps {
-                withDockerRegistry([credentialsId: 'docker-hub-credentials']) {  // ← ИСПРАВЛЕНО!
+                withDockerRegistry([credentialsId: 'docker-hub-credentials']) { 
                     sh '''
                     docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
                     docker push ${DOCKER_IMAGE}:latest
