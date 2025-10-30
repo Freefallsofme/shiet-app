@@ -57,7 +57,7 @@ pipeline {
 
         stage('Push') {
             steps {
-                withDockerRegistry([credentialsId: 'docker-hub-credentials', url: '']) {
+                withDockerRegistry([credentialsId: 'docker-hub-credentials']) {  // ← ИСПРАВЛЕНО!
                     sh '''
                     docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
                     docker push ${DOCKER_IMAGE}:latest
@@ -82,7 +82,7 @@ pipeline {
     }
 
     post {
-        success { echo 'Deployed!' }
-        failure { echo 'Failed!' }
+        success { echo 'Deployed to Kubernetes!' }
+        failure { echo 'Pipeline failed!' }
     }
 }
