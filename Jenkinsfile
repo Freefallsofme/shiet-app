@@ -51,7 +51,7 @@ pipeline {
             steps {
                 sh '''
                 apk add --no-cache python3 py3-pip
-                python3 -m pip install -r requirements.txt
+                python3 -m pip install -r requirements.txt --break-system-packages
                 python3 -m unittest discover tests
                 '''
             }
@@ -87,6 +87,9 @@ pipeline {
     post {
         always {
             sh 'docker system prune -f || true'
+        }
+        success {
+            echo 'SUCCESS: Flask app deployed to Kubernetes!'
         }
     }
 }
