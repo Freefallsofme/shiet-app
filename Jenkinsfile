@@ -1,7 +1,7 @@
 pipeline {
     agent {
         kubernetes {
-            label 'docker-agent'
+            label 'docker-minikube'
             defaultContainer 'docker'
             yaml '''
             apiVersion: v1
@@ -9,24 +9,18 @@ pipeline {
             spec:
               containers:
               - name: docker
-                image: docker:24.0-dind
+                image: docker:24.0-cli
                 command: ["sleep", "infinity"]
-                securityContext:
-                  privileged: true
                 volumeMounts:
                 - name: docker-sock
                   mountPath: /var/run/docker.sock
               - name: jnlp
                 image: jenkins/inbound-agent:latest
-                volumeMounts:
-                - name: workspace-volume
-                  mountPath: /home/jenkins/agent
               volumes:
               - name: docker-sock
                 hostPath:
                   path: /var/run/docker.sock
-              - name: workspace-volume
-                emptyDir: {}
+                  type: Socket
             '''
         }
     }
@@ -44,54 +38,48 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Image') {
             steps {
-                script {
-                    def dockerImage = docker.build("${DOCKER_IMAGE}:${IMAGE_TAG}", ".")
-                    dockerImage.tag("latest")
-                    env.BUILT_IMAGE = dockerImage.id
-                }
+                sh '''
+                docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} .
+                docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${DOCKER_IMAGE}:latest
+                '''
             }
         }
 
         stage('Test') {
             steps {
-                container('docker') {
+                sh '''
+                apk add --no-cache python3 py3-pip
+                python3 -m pip install -r requirements.txt
+                python3 -m unittest discover tests
+                '''
+            }
+        }
+
+        stage('Push') {
+            steps {
+                withDockerRegistry([credentialsId: 'docker-hub-credentials', url: '']) {
                     sh '''
-                    apk add --no-cache python3 py3-pip
-                    python3 -m pip install -r requirements.txt
-                    python3 -m unittest discover tests
+                    docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
+                    docker push ${DOCKER_IMAGE}:latest
                     '''
                 }
             }
         }
 
-        stage('Push Image') {
+        stage('Deploy') {
             steps {
-                script {
-                    docker.withRegistry('https://registry.hub.docker.com', 'docker-hub-credentials') {
-                        def img = docker.image("${DOCKER_IMAGE}:${IMAGE_TAG}")
-                        img.push()
-                        img.push('latest')
-                    }
-                }
-            }
-        }
+                sh '''
+                apk add --no-cache curl
+                curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl
+                chmod +x kubectl
+                mv kubectl /usr/bin/
 
-        stage('Deploy to K8s') {
-            steps {
-                container('docker') {
-                    sh '''
-                    apk add --no-cache curl
-                    curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl
-                    chmod +x kubectl
-                    mv kubectl /usr/bin/
-
-                    sed -i "s|image: .*|image: ${DOCKER_IMAGE}:latest|g" k8s/deployment.yaml
-                    kubectl apply -f k8s/deployment.yaml -n ${K8S_NAMESPACE}
-                    kubectl apply -f k8s/service.yaml -n ${K8S_NAMESPACE}
-                    '''
-                }
+                sed -i "s|image: .*|image: ${DOCKER_IMAGE}:latest|g" k8s/deployment.yaml
+                kubectl apply -f k8s/deployment.yaml -n ${K8S_NAMESPACE}
+                kubectl apply -f k8s/service.yaml -n ${K8S_NAMESPACE}
+                '''
             }
         }
     }
@@ -99,12 +87,6 @@ pipeline {
     post {
         always {
             sh 'docker system prune -f || true'
-        }
-        success {
-            echo 'CI/CD Pipeline completed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed. Check logs.'
         }
     }
 }
